@@ -1,13 +1,19 @@
 const path = require('path')
 const fsPromises = require('fs').promises
-const { v4: uuidv4 } = require('uuid')
-
+const db = require('./db')
+const { ObjectId } = require('mongodb')
 const contactsPath = path.resolve('model/contacts.json')
+
+const getContactsCollection = async () => {
+  const client = await db
+  const collection = await client.db().collection('contacts')
+  return collection
+}
 
 const listContacts = async () => {
   try {
-    const data = await fsPromises.readFile(contactsPath, 'utf-8')
-    const contacts = JSON.parse(data)
+    const collection = await getContactsCollection()
+    const contacts = await collection.find({}).toArray()
     return contacts
   } catch (error) {
     console.error(error)
@@ -16,9 +22,10 @@ const listContacts = async () => {
 
 const getContactById = async (contactId) => {
   try {
-    const data = await fsPromises.readFile(contactsPath, 'utf-8')
-    const contacts = JSON.parse(data)
-    const contact = contacts.find((contact) => String(contact.id) === contactId)
+    const objectId = new ObjectId(contactId)
+
+    const collection = await getContactsCollection()
+    const [contact] = await collection.find({ _id: objectId }).toArray()
     return contact
   } catch (error) {
     console.error(error)
@@ -27,13 +34,11 @@ const getContactById = async (contactId) => {
 
 const removeContact = async (contactId) => {
   try {
-    const data = await fsPromises.readFile(contactsPath, 'utf8')
-    const contacts = JSON.parse(data)
-    const newContacts = contacts.filter(
-      (contact) => String(contact.id) !== contactId
-    )
-    await fsPromises.writeFile(contactsPath, JSON.stringify(newContacts))
-    return true
+    const objectId = new ObjectId(contactId)
+    const collection = await getContactsCollection()
+
+    const { value: result } = await collection.findOneAndDelete({ _id: objectId })
+    return result
   } catch (error) {
     console.error(error)
   }
@@ -41,18 +46,9 @@ const removeContact = async (contactId) => {
 
 const addContact = async (body) => {
   try {
-    const { name, email, phone } = body
-    const contact = {
-      id: uuidv4(),
-      name: name,
-      email: email,
-      phone: phone
-    }
-    const data = await fsPromises.readFile(contactsPath, 'utf8')
-    const contacts = JSON.parse(data)
-    const newContacts = [...contacts, contact]
-    await fsPromises.writeFile(contactsPath, JSON.stringify(newContacts))
-    return contact
+    const collection = await getContactsCollection()
+    const { ops: [result] } = await collection.insertOne(body)
+    return result
   } catch (error) {
     console.error(error)
   }
@@ -60,20 +56,12 @@ const addContact = async (body) => {
 
 const updateContact = async (contactId, body) => {
   try {
-    const data = await fsPromises.readFile(contactsPath, 'utf8')
-    const contacts = JSON.parse(data)
-    const contact = contacts.find(contact => String(contact.id) === contactId)
-    if (contact) {
-      const upContact = Object.assign(contact, body)
-      const upContacts = contacts.map(contact => {
-        if (String(contact.id) === upContact.id) {
-          return upContact
-        }
-        return contact
-      })
-      await fsPromises.writeFile(contactsPath, JSON.stringify(upContacts))
-      return upContact
-    }
+    const objectId = new ObjectId(contactId)
+    const collection = await getContactsCollection()
+
+    const { value: result } = await collection.findOneAndUpdate({ _id: objectId },
+      { $set: body }, { returnOriginal: false })
+    return result
   } catch (error) {
     console.error(error)
   }
