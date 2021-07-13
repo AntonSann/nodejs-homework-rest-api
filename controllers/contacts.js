@@ -17,6 +17,7 @@ const getAll = async (req, res, next) => {
     next(error)
   }
 }
+
 const getById = async (req, res, next) => {
   try {
     const userId = req.user.id
